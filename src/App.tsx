@@ -1,3 +1,14 @@
+import {
+  BookmarkPlus,
+  Columns2,
+  Copy,
+  ExternalLink,
+  Library,
+  MousePointerClick,
+  PanelRightOpen,
+  Sparkles,
+  Trash2
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ensureSecondaryPlatform, createNextPaneState } from "./lib/app-state";
 import {
@@ -19,17 +30,25 @@ function PlatformView({
   return (
     <section className="platform-view">
       <header className="platform-view__header">
-        <div>
-          <p className="platform-view__eyebrow">{title}</p>
-          <h2>{platform.name}</h2>
+        <div className="platform-view__title">
+          <span
+            className="platform-view__indicator"
+            style={{ ["--platform-accent" as string]: platform.accent }}
+          />
+          <div>
+            <p>{title}</p>
+            <h2>{platform.name}</h2>
+          </div>
         </div>
         <a
-          className="platform-view__link"
+          className="icon-link"
           href={platform.url}
           target="_blank"
           rel="noreferrer"
+          title={`在浏览器打开 ${platform.name}`}
+          aria-label={`在浏览器打开 ${platform.name}`}
         >
-          在浏览器打开
+          <ExternalLink size={16} strokeWidth={1.8} />
         </a>
       </header>
       <webview
@@ -86,7 +105,9 @@ export default function App() {
     : null;
 
   const favoriteCountLabel = useMemo(() => {
-    return favorites.length === 1 ? "1 saved prompt" : `${favorites.length} saved prompts`;
+    return favorites.length === 1
+      ? "1 saved prompt"
+      : `${favorites.length} saved prompts`;
   }, [favorites]);
 
   const handleCopyAndOpen = (platformId: string) => {
@@ -123,7 +144,10 @@ export default function App() {
 
       return {
         ...nextState,
-        secondaryPlatformId: ensureSecondaryPlatform(nextState, platforms.map((platform) => platform.id))
+        secondaryPlatformId: ensureSecondaryPlatform(
+          nextState,
+          platforms.map((platform) => platform.id)
+        )
       };
     });
   };
@@ -163,13 +187,11 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand-card">
-          <p className="brand-card__eyebrow">AI Desk</p>
-          <h1>桌面 AI 聚合工作台</h1>
-          <p className="brand-card__copy">
-            聚合官方网页版，不接 API，不托管账号，不越过登录。
-          </p>
+      <div className="ambient-layer" />
+
+      <aside className="platform-rail" aria-label="AI 平台">
+        <div className="brand-mark" title="AI Desk">
+          <Sparkles size={20} strokeWidth={1.8} />
         </div>
 
         <nav className="platform-nav">
@@ -187,98 +209,49 @@ export default function App() {
                   }))
                 }
                 style={{ ["--platform-accent" as string]: platform.accent }}
+                title={platform.name}
                 type="button"
               >
-                <span>{platform.name}</span>
-                <small>{platform.url.replace(/^https?:\/\//, "")}</small>
+                <span className="platform-nav__glyph">
+                  {platform.name.slice(0, 1)}
+                </span>
+                <span className="platform-nav__name">{platform.name}</span>
               </button>
             );
           })}
         </nav>
       </aside>
 
-      <main className="workspace">
-        <section className="prompt-bar">
-          <div className="prompt-bar__header">
-            <div>
-              <p className="section-eyebrow">Unified Prompt</p>
-              <h2>复制后跳转到目标平台，由用户手动粘贴发送</h2>
-            </div>
-            <div className="prompt-bar__toggles">
-              <button
-                className={`ghost-button${paneState.compareEnabled ? " is-on" : ""}`}
-                onClick={handleToggleCompare}
-                type="button"
-              >
-                {paneState.compareEnabled ? "退出双栏" : "开启双栏对比"}
-              </button>
-              {paneState.compareEnabled ? (
-                <label className="secondary-select">
-                  <span>右栏平台</span>
-                  <select
-                    value={secondaryPlatform?.id ?? ""}
-                    onChange={(event) =>
-                      setPaneState((current) => ({
-                        ...current,
-                        secondaryPlatformId: event.target.value
-                      }))
-                    }
-                  >
-                    {platforms
-                      .filter(
-                        (platform) =>
-                          platform.id !== paneState.primaryPlatformId
-                      )
-                      .map((platform) => (
-                        <option key={platform.id} value={platform.id}>
-                          {platform.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-              ) : null}
-            </div>
+      <main className="workspace" aria-label="AI Desk 工作区">
+        <header className="workspace-titlebar">
+          <div>
+            <p>AI Desk</p>
+            <h1>{primaryPlatform.name}</h1>
           </div>
-
-          <textarea
-            className="prompt-input"
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder="在这里编写统一 Prompt，点击目标平台按钮后会复制到系统剪贴板。"
-          />
-
-          <div className="prompt-actions">
-            {platforms.map((platform) => (
-              <button
-                key={platform.id}
-                className="prompt-actions__button"
-                onClick={() => handleCopyAndOpen(platform.id)}
-                style={{ ["--platform-accent" as string]: platform.accent }}
-                type="button"
-              >
-                复制并打开 {platform.name}
-              </button>
-            ))}
+          <div className="workspace-titlebar__meta">
+            <span>{paneState.compareEnabled ? "双栏对比" : "单栏工作区"}</span>
+            <span>{statusMessage}</span>
           </div>
-
-          <p className="status-banner">{statusMessage}</p>
-        </section>
+        </header>
 
         <section
           className={`view-grid${paneState.compareEnabled ? " is-compare" : ""}`}
         >
-          <PlatformView platform={primaryPlatform} title="左栏 / 主平台" />
+          <PlatformView platform={primaryPlatform} title="主平台" />
           {paneState.compareEnabled && secondaryPlatform ? (
-            <PlatformView platform={secondaryPlatform} title="右栏 / 对比平台" />
+            <PlatformView platform={secondaryPlatform} title="对比平台" />
           ) : null}
         </section>
       </main>
 
-      <aside className="favorites-panel">
+      <aside className="favorites-panel" aria-label="Prompt 收藏夹">
         <div className="favorites-panel__header">
-          <div>
-            <p className="section-eyebrow">Favorites</p>
-            <h2>Prompt 收藏夹</h2>
+          <div className="panel-title">
+            <Library size={18} strokeWidth={1.8} />
+            <div>
+              <p>Favorites</p>
+              <h2>Prompt 收藏夹</h2>
+            </div>
           </div>
           <span>{favoriteCountLabel}</span>
         </div>
@@ -289,19 +262,24 @@ export default function App() {
             type="text"
             value={favoriteTitle}
             onChange={(event) => setFavoriteTitle(event.target.value)}
-            placeholder="默认自动截取 Prompt 前缀"
+            placeholder="默认使用 Prompt 摘要"
           />
         </label>
 
-        <button className="save-button" onClick={handleSaveFavorite} type="button">
+        <button
+          className="material-button save-button"
+          onClick={handleSaveFavorite}
+          type="button"
+        >
+          <BookmarkPlus size={16} strokeWidth={1.9} />
           保存当前 Prompt
         </button>
 
         <div className="favorites-list">
           {favorites.length === 0 ? (
             <div className="favorites-empty">
+              <Library size={18} strokeWidth={1.7} />
               <p>还没有收藏 Prompt。</p>
-              <p>保存后会只存到当前设备的 localStorage。</p>
             </div>
           ) : (
             favorites.map((favorite) => (
@@ -315,18 +293,20 @@ export default function App() {
                 <p>{favorite.content}</p>
                 <div className="favorite-card__actions">
                   <button
-                    className="ghost-button"
+                    className="icon-button"
                     onClick={() => handleUseFavorite(favorite)}
+                    title="使用 Prompt"
                     type="button"
                   >
-                    使用 Prompt
+                    <MousePointerClick size={16} strokeWidth={1.8} />
                   </button>
                   <button
-                    className="danger-button"
+                    className="icon-button danger-button"
                     onClick={() => handleDeleteFavorite(favorite.id)}
+                    title="删除"
                     type="button"
                   >
-                    删除
+                    <Trash2 size={16} strokeWidth={1.8} />
                   </button>
                 </div>
               </article>
@@ -334,6 +314,77 @@ export default function App() {
           )}
         </div>
       </aside>
+
+      <section className="composer-dock" aria-label="统一 Prompt">
+        <div className="dock-controls">
+          <button
+            className={`dock-button${paneState.compareEnabled ? " is-on" : ""}`}
+            onClick={handleToggleCompare}
+            title={paneState.compareEnabled ? "退出双栏对比" : "开启双栏对比"}
+            type="button"
+          >
+            <Columns2 size={17} strokeWidth={1.9} />
+          </button>
+          {paneState.compareEnabled ? (
+            <label className="secondary-select">
+              <PanelRightOpen size={15} strokeWidth={1.8} />
+              <select
+                value={secondaryPlatform?.id ?? ""}
+                onChange={(event) =>
+                  setPaneState((current) => ({
+                    ...current,
+                    secondaryPlatformId: event.target.value
+                  }))
+                }
+                aria-label="右栏平台"
+              >
+                {platforms
+                  .filter(
+                    (platform) => platform.id !== paneState.primaryPlatformId
+                  )
+                  .map((platform) => (
+                    <option key={platform.id} value={platform.id}>
+                      {platform.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          ) : null}
+        </div>
+
+        <textarea
+          className="prompt-input"
+          value={prompt}
+          onChange={(event) => setPrompt(event.target.value)}
+          placeholder="输入 Prompt，复制到目标平台后手动粘贴发送"
+        />
+
+        <div className="dock-actions">
+          <button
+            className="dock-button"
+            onClick={handleSaveFavorite}
+            title="保存当前 Prompt"
+            type="button"
+          >
+            <BookmarkPlus size={17} strokeWidth={1.9} />
+          </button>
+          <div className="platform-action-strip" aria-label="复制并打开平台">
+            {platforms.map((platform) => (
+              <button
+                key={platform.id}
+                className="platform-action"
+                onClick={() => handleCopyAndOpen(platform.id)}
+                style={{ ["--platform-accent" as string]: platform.accent }}
+                title={`复制并打开 ${platform.name}`}
+                type="button"
+              >
+                <Copy size={14} strokeWidth={1.9} />
+                <span>{platform.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
