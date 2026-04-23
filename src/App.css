@@ -295,6 +295,35 @@ button {
   background: #fff;
 }
 
+.mobile-platform-card {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  min-height: 520px;
+  padding: 28px;
+  border-top: 1px solid rgba(214, 222, 232, 0.64);
+  color: rgba(31, 43, 58, 0.72);
+  text-align: center;
+}
+
+.mobile-platform-card h3,
+.mobile-platform-card p {
+  margin: 0;
+}
+
+.mobile-platform-card h3 {
+  color: #172033;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.mobile-platform-card p {
+  max-width: 260px;
+  overflow-wrap: anywhere;
+  font-size: 0.86rem;
+}
+
 .icon-link,
 .icon-button,
 .dock-button {

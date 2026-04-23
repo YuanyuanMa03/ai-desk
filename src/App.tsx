@@ -10,6 +10,7 @@ import {
   Trash2
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Browser } from "@capacitor/browser";
 import { ensureSecondaryPlatform, createNextPaneState } from "./lib/app-state";
 import {
   buildFavoriteTitle,
@@ -22,10 +23,12 @@ import { platformMap, platforms, type Platform } from "./config/platforms";
 
 function PlatformView({
   platform,
-  title
+  title,
+  isElectron
 }: {
   platform: Platform;
   title: string;
+  isElectron: boolean;
 }) {
   return (
     <section className="platform-view">
@@ -51,16 +54,33 @@ function PlatformView({
           <ExternalLink size={16} strokeWidth={1.8} />
         </a>
       </header>
-      <webview
-        className="platform-view__webview"
-        src={platform.url}
-        partition={platform.partition}
-      />
+      {isElectron ? (
+        <webview
+          className="platform-view__webview"
+          src={platform.url}
+          partition={platform.partition}
+        />
+      ) : (
+        <div className="mobile-platform-card">
+          <ExternalLink size={30} strokeWidth={1.6} />
+          <h3>{platform.name}</h3>
+          <p>{platform.url.replace(/^https?:\/\//, "")}</p>
+          <button
+            className="material-button"
+            onClick={() => Browser.open({ url: platform.url })}
+            type="button"
+          >
+            <ExternalLink size={16} strokeWidth={1.9} />
+            打开官方页面
+          </button>
+        </div>
+      )}
     </section>
   );
 }
 
 export default function App() {
+  const isElectron = Boolean(window.electronAPI);
   const [prompt, setPrompt] = useState("");
   const [favoriteTitle, setFavoriteTitle] = useState("");
   const [favorites, setFavorites] = useState<PromptFavorite[]>([]);
@@ -70,7 +90,9 @@ export default function App() {
     secondaryPlatformId: null as string | null
   });
   const [statusMessage, setStatusMessage] = useState(
-    "登录态仅保存在本机 Electron WebView session。"
+    isElectron
+      ? "登录态仅保存在本机 Electron WebView session。"
+      : "移动端保留 Prompt 与收藏，官方页面通过系统浏览器打开。"
   );
 
   useEffect(() => {
@@ -110,15 +132,33 @@ export default function App() {
       : `${favorites.length} saved prompts`;
   }, [favorites]);
 
-  const handleCopyAndOpen = (platformId: string) => {
+  const copyPrompt = async (text: string) => {
+    if (window.electronAPI) {
+      window.electronAPI.writeClipboard(text);
+      return;
+    }
+
+    await navigator.clipboard.writeText(text);
+  };
+
+  const openPlatform = async (platform: Platform) => {
+    if (isElectron) {
+      return;
+    }
+
+    await Browser.open({ url: platform.url });
+  };
+
+  const handleCopyAndOpen = async (platformId: string) => {
     const text = prompt.trim();
+    const platform = platformMap[platformId];
 
     if (!text) {
       setStatusMessage("先输入 Prompt，再执行复制并打开。");
       return;
     }
 
-    window.electronAPI.writeClipboard(text);
+    await copyPrompt(text);
     setPaneState((current) =>
       createNextPaneState(
         {
@@ -131,7 +171,12 @@ export default function App() {
         platformId
       )
     );
-    setStatusMessage(`已复制到剪贴板，并切换到 ${platformMap[platformId].name}。`);
+    await openPlatform(platform);
+    setStatusMessage(
+      isElectron
+        ? `已复制到剪贴板，并切换到 ${platform.name}。`
+        : `已复制到剪贴板，并打开 ${platform.name} 官方页面。`
+    );
   };
 
   const handleToggleCompare = () => {
@@ -237,9 +282,17 @@ export default function App() {
         <section
           className={`view-grid${paneState.compareEnabled ? " is-compare" : ""}`}
         >
-          <PlatformView platform={primaryPlatform} title="主平台" />
+          <PlatformView
+            platform={primaryPlatform}
+            title="主平台"
+            isElectron={isElectron}
+          />
           {paneState.compareEnabled && secondaryPlatform ? (
-            <PlatformView platform={secondaryPlatform} title="对比平台" />
+            <PlatformView
+              platform={secondaryPlatform}
+              title="对比平台"
+              isElectron={isElectron}
+            />
           ) : null}
         </section>
       </main>

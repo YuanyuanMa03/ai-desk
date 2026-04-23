@@ -54,6 +54,42 @@ npm run build
 - Vite 前端构建
 - Electron 主进程与 preload 文件语法检查
 
+## 移动端构建
+
+移动端使用 Capacitor 复用同一套 React 前端：
+
+```bash
+npm run mobile:sync
+```
+
+Android debug APK：
+
+```bash
+npm run build:android
+```
+
+如果本机和当前开发机一样使用 Homebrew 安装的 JDK 21 与 Android command line tools，可以直接运行：
+
+```bash
+npm run build:android:local
+```
+
+生成路径：
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+iOS 工程：
+
+```bash
+npm run open:ios
+```
+
+iOS 需要完整 Xcode、Apple Developer Team 和签名配置后才能产出真机 `.ipa`。当前仓库已经生成了 Capacitor iOS 工程，路径是 `ios/App/App.xcodeproj`。
+
+移动端限制：iOS/Android 不支持 Electron `webview`。移动端版本保留 Prompt、收藏和平台入口，点击平台时复制 Prompt 并通过系统/内置浏览器打开官方页面，由用户手动粘贴发送。
+
 ## 如何添加新的 AI 平台
 
 编辑 [src/config/platforms.ts](/Users/mayuanyuan/git/ai-desk/src/config/platforms.ts)：
@@ -91,10 +127,11 @@ npm run build
 - 左侧平台导航栏
 - 中间单栏官方网页视图
 - 双栏对比模式
-- 顶部统一 Prompt 输入区
+- 底部浮动统一 Prompt 输入区
 - “复制并打开某平台”动作
 - 右侧 Prompt 收藏夹
 - 本地 `localStorage` 持久化
+- macOS / Windows / Android / iOS 工程构建入口
 
 ## 后续扩展方向
 

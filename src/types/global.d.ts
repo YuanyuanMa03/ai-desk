@@ -2,7 +2,7 @@ import type { DetailedHTMLProps, HTMLAttributes } from "react";
 
 declare global {
   interface Window {
-    electronAPI: {
+    electronAPI?: {
       writeClipboard: (text: string) => void;
       getVersion: () => string;
     };
