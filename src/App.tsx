@@ -1,40 +1,30 @@
 import { Browser } from "@capacitor/browser";
 import { useEffect, useMemo, useState } from "react";
 import { ComposerDock } from "./components/ComposerDock";
-import { FavoritesPanel } from "./components/FavoritesPanel";
+import { KnowledgePanel } from "./components/KnowledgePanel";
 import { PlatformRail } from "./components/PlatformRail";
 import { PlatformView } from "./components/PlatformView";
 import { platformMap, platforms, type Platform } from "./config/platforms";
 import { ensureSecondaryPlatform, createNextPaneState } from "./lib/app-state";
 import {
-  buildFavoriteTitle,
-  createGroup,
-  createFavorite,
-  createTag,
-  loadFavorites,
-  loadGroups,
-  loadTags,
-  saveFavorites,
-  saveGroups,
-  saveTags,
-  updateFavorite,
-  type PromptFavorite,
-  type PromptGroup,
-  type PromptTag
-} from "./lib/favorites";
+  DEFAULT_KNOWLEDGE_SPACES,
+  createKnowledgeItem,
+  exportKnowledgeAsMarkdown,
+  loadKnowledgeItems,
+  saveKnowledgeItems,
+  type KnowledgeDraft,
+  type KnowledgeItem
+} from "./lib/knowledge";
 
 export default function App() {
   const isElectron = Boolean(window.electronAPI);
   const [prompt, setPrompt] = useState("");
-  const [favoriteTitle, setFavoriteTitle] = useState("");
-  const [favorites, setFavorites] = useState<PromptFavorite[]>([]);
-  const [groups, setGroups] = useState<PromptGroup[]>([]);
-  const [tags, setTags] = useState<PromptTag[]>([]);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
   const [storageReady, setStorageReady] = useState(false);
+  const [quickCopyExpanded, setQuickCopyExpanded] = useState(false);
   const [lastCopiedAt, setLastCopiedAt] = useState<number | null>(null);
   const [copyToastVisible, setCopyToastVisible] = useState(false);
+  const [copyToastMessage, setCopyToastMessage] = useState("已复制到剪贴板");
   const [paneState, setPaneState] = useState({
     primaryPlatformId: platforms[0].id,
     compareEnabled: false,
@@ -42,14 +32,12 @@ export default function App() {
   });
   const [statusMessage, setStatusMessage] = useState(
     isElectron
-      ? "登录态仅保存在本机 Electron WebView session。"
-      : "移动端保留 Prompt 与收藏，官方页面通过系统浏览器打开。"
+      ? "登录态仅保存在本机 Electron WebView session，知识库仅保存在 localStorage。"
+      : "移动端保留本地知识库，官方页面通过系统浏览器打开。"
   );
 
   useEffect(() => {
-    setFavorites(loadFavorites());
-    setGroups(loadGroups());
-    setTags(loadTags());
+    setKnowledgeItems(loadKnowledgeItems());
     setStorageReady(true);
   }, []);
 
@@ -58,24 +46,8 @@ export default function App() {
       return;
     }
 
-    saveFavorites(favorites);
-  }, [favorites, storageReady]);
-
-  useEffect(() => {
-    if (!storageReady) {
-      return;
-    }
-
-    saveGroups(groups);
-  }, [groups, storageReady]);
-
-  useEffect(() => {
-    if (!storageReady) {
-      return;
-    }
-
-    saveTags(tags);
-  }, [storageReady, tags]);
+    saveKnowledgeItems(knowledgeItems);
+  }, [knowledgeItems, storageReady]);
 
   useEffect(() => {
     if (!copyToastVisible) {
@@ -110,13 +82,13 @@ export default function App() {
     ? platformMap[paneState.secondaryPlatformId]
     : null;
 
-  const favoriteCountLabel = useMemo(() => {
-    return favorites.length === 1
-      ? "1 saved prompt"
-      : `${favorites.length} saved prompts`;
-  }, [favorites]);
+  const knowledgeCountLabel = useMemo(() => {
+    return knowledgeItems.length === 1
+      ? "1 local note"
+      : `${knowledgeItems.length} local notes`;
+  }, [knowledgeItems]);
 
-  const copyPrompt = async (text: string) => {
+  const copyText = async (text: string) => {
     if (window.electronAPI) {
       window.electronAPI.writeClipboard(text);
       return;
@@ -133,6 +105,28 @@ export default function App() {
     await Browser.open({ url: platform.url });
   };
 
+  const activatePlatform = async (platformId: string) => {
+    const platform = platformMap[platformId];
+
+    setPaneState((current) => {
+      const nextState = createNextPaneState(current, platformId);
+
+      return {
+        ...nextState,
+        secondaryPlatformId: ensureSecondaryPlatform(
+          nextState,
+          platforms.map((candidate) => candidate.id)
+        )
+      };
+    });
+    await openPlatform(platform);
+    setStatusMessage(
+      isElectron
+        ? `已切换到 ${platform.name}，请在官方页面内继续操作。`
+        : `已打开 ${platform.name} 官方页面。`
+    );
+  };
+
   const handleCopyAndOpen = async (platformId: string) => {
     const text = prompt.trim();
     const platform = platformMap[platformId];
@@ -142,27 +136,80 @@ export default function App() {
       return;
     }
 
-    await copyPrompt(text);
+    await copyText(text);
     setLastCopiedAt(Date.now());
+    setCopyToastMessage("Prompt 已复制到剪贴板");
     setCopyToastVisible(true);
-    setPaneState((current) =>
-      createNextPaneState(
-        {
-          ...current,
-          secondaryPlatformId: ensureSecondaryPlatform(
-            current,
-            platforms.map((platform) => platform.id)
-          )
-        },
-        platformId
-      )
-    );
+    setPaneState((current) => {
+      const nextState = createNextPaneState(current, platformId);
+
+      return {
+        ...nextState,
+        secondaryPlatformId: ensureSecondaryPlatform(
+          nextState,
+          platforms.map((platform) => platform.id)
+        )
+      };
+    });
     await openPlatform(platform);
     setStatusMessage(
       isElectron
         ? `已复制到剪贴板，并切换到 ${platform.name}。`
         : `已复制到剪贴板，并打开 ${platform.name} 官方页面。`
     );
+  };
+
+  const handleCreateKnowledgeItem = (draft: KnowledgeDraft) => {
+    const item = createKnowledgeItem(draft);
+
+    if (!item.content && !item.title) {
+      return;
+    }
+
+    setKnowledgeItems((current) => [item, ...current]);
+    setStatusMessage(`已保存知识：${item.title}`);
+  };
+
+  const handleDeleteKnowledgeItem = (itemId: string) => {
+    setKnowledgeItems((current) => current.filter((item) => item.id !== itemId));
+    setStatusMessage("已删除本地知识。");
+  };
+
+  const handleCopyKnowledgeItem = async (item: KnowledgeItem) => {
+    await copyText(item.content || item.title);
+    setCopyToastMessage("知识已复制到剪贴板");
+    setCopyToastVisible(true);
+    setLastCopiedAt(Date.now());
+    setStatusMessage(`已复制知识：${item.title}`);
+  };
+
+  const handleUseKnowledgeText = (text: string) => {
+    setPrompt(text);
+    setQuickCopyExpanded(true);
+    setStatusMessage("已放入 Quick Copy，可选择平台复制并打开。");
+  };
+
+  const handleExportKnowledgeMarkdown = () => {
+    const platformNames = Object.fromEntries(
+      platforms.map((platform) => [platform.id, platform.name])
+    );
+    const markdown = exportKnowledgeAsMarkdown(knowledgeItems, {
+      platformNames,
+      spaces: DEFAULT_KNOWLEDGE_SPACES
+    });
+    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `ai-desk-knowledge-${new Date()
+      .toISOString()
+      .slice(0, 10)}.md`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setStatusMessage("已导出本地知识库 Markdown。");
   };
 
   const handleToggleCompare = () => {
@@ -183,131 +230,6 @@ export default function App() {
     });
   };
 
-  const handleSaveFavorite = () => {
-    const text = prompt.trim();
-
-    if (!text) {
-      setStatusMessage("空 Prompt 不会被保存。");
-      return;
-    }
-
-    const favorite = createFavorite(text, selectedGroupId, selectedTagIds);
-    const normalizedTitle = favoriteTitle.trim();
-    const finalFavorite = {
-      ...favorite,
-      title: normalizedTitle || buildFavoriteTitle(text)
-    };
-
-    setFavorites((current) => [finalFavorite, ...current]);
-    setFavoriteTitle("");
-    setSelectedTagIds([]);
-    setStatusMessage(`已保存 Prompt：${finalFavorite.title}`);
-  };
-
-  const handleUseFavorite = (favorite: PromptFavorite) => {
-    setPrompt(favorite.content);
-    setFavoriteTitle(favorite.title);
-    setStatusMessage(`已载入收藏：${favorite.title}`);
-  };
-
-  const handleDeleteFavorite = (favoriteId: string) => {
-    setFavorites((current) =>
-      current.filter((favorite) => favorite.id !== favoriteId)
-    );
-    setStatusMessage("已删除收藏 Prompt。");
-  };
-
-  const handleCreateGroup = (name: string) => {
-    if (!name.trim()) {
-      return;
-    }
-
-    const group = createGroup(name, groups);
-    setGroups((current) => [...current, group]);
-    setSelectedGroupId(group.id);
-    setStatusMessage(`已创建分组：${group.name}`);
-  };
-
-  const handleCreateTag = (name: string) => {
-    const normalized = name.trim().replace(/\s+/g, " ");
-
-    if (!normalized) {
-      return;
-    }
-
-    const existing = tags.find(
-      (tag) => tag.name.toLowerCase() === normalized.toLowerCase()
-    );
-
-    if (existing) {
-      setSelectedTagIds((current) =>
-        current.includes(existing.id) ? current : [...current, existing.id]
-      );
-      return;
-    }
-
-    const tag = createTag(normalized, tags);
-    setTags((current) => [...current, tag]);
-    setSelectedTagIds((current) => [...current, tag.id]);
-    setStatusMessage(`已创建标签：${tag.name}`);
-  };
-
-  const handleManageGroup = (
-    groupId: string,
-    action: "rename" | "delete" | "color",
-    value?: string
-  ) => {
-    if (action === "delete") {
-      setGroups((current) => current.filter((group) => group.id !== groupId));
-      setFavorites((current) =>
-        current.map((favorite) =>
-          favorite.groupId === groupId
-            ? updateFavorite(favorite, { groupId: null })
-            : favorite
-        )
-      );
-      setSelectedGroupId((current) => (current === groupId ? null : current));
-      setStatusMessage("已删除分组，相关 Prompt 已移到 Ungrouped。");
-      return;
-    }
-
-    setGroups((current) =>
-      current.map((group) =>
-        group.id === groupId
-          ? {
-              ...group,
-              ...(action === "rename" && value?.trim()
-                ? { name: value.trim() }
-                : {}),
-              ...(action === "color" && value?.trim()
-                ? { color: value.trim() }
-                : {})
-            }
-          : group
-      )
-    );
-  };
-
-  const handleMoveFavorite = (favoriteId: string, groupId: string | null) => {
-    setFavorites((current) =>
-      current.map((favorite) =>
-        favorite.id === favoriteId
-          ? updateFavorite(favorite, { groupId })
-          : favorite
-      )
-    );
-  };
-
-  const handleEditFavorite = (favoriteId: string, title: string) => {
-    setFavorites((current) =>
-      current.map((favorite) =>
-        favorite.id === favoriteId
-          ? updateFavorite(favorite, { title: title.trim() })
-          : favorite
-      )
-    );
-  };
-
   return (
     <div className="app-shell">
       <div className="ambient-layer" />
@@ -315,12 +237,22 @@ export default function App() {
       <PlatformRail
         activePlatformId={paneState.primaryPlatformId}
         platforms={platforms}
-        onSelectPlatform={(platformId) =>
-          setPaneState((current) => ({
-            ...current,
-            primaryPlatformId: platformId
-          }))
-        }
+        onSelectPlatform={(platformId) => {
+          setPaneState((current) => {
+            const nextState = {
+              ...current,
+              primaryPlatformId: platformId
+            };
+
+            return {
+              ...nextState,
+              secondaryPlatformId: ensureSecondaryPlatform(
+                nextState,
+                platforms.map((platform) => platform.id)
+              )
+            };
+          });
+        }}
       />
 
       <main className="workspace" aria-label="AI Desk 工作区">
@@ -355,36 +287,30 @@ export default function App() {
         </section>
       </main>
 
-      <FavoritesPanel
-        favoriteCountLabel={favoriteCountLabel}
-        favoriteTitle={favoriteTitle}
-        favorites={favorites}
-        groups={groups}
-        tags={tags}
-        selectedGroupId={selectedGroupId}
-        selectedTagIds={selectedTagIds}
-        onChangeTitle={setFavoriteTitle}
-        onChangeSelectedGroup={setSelectedGroupId}
-        onChangeSelectedTags={setSelectedTagIds}
-        onCreateGroup={handleCreateGroup}
-        onCreateTag={handleCreateTag}
-        onDeleteFavorite={handleDeleteFavorite}
-        onEditFavorite={handleEditFavorite}
-        onManageGroup={handleManageGroup}
-        onMoveFavorite={handleMoveFavorite}
-        onSaveFavorite={handleSaveFavorite}
-        onUseFavorite={handleUseFavorite}
+      <KnowledgePanel
+        activePlatformId={paneState.primaryPlatformId}
+        countLabel={knowledgeCountLabel}
+        items={knowledgeItems}
+        platforms={platforms}
+        spaces={DEFAULT_KNOWLEDGE_SPACES}
+        onCopyItem={handleCopyKnowledgeItem}
+        onCreateItem={handleCreateKnowledgeItem}
+        onDeleteItem={handleDeleteKnowledgeItem}
+        onExportMarkdown={handleExportKnowledgeMarkdown}
+        onOpenPlatform={activatePlatform}
+        onUseText={handleUseKnowledgeText}
       />
 
       <ComposerDock
         compareEnabled={paneState.compareEnabled}
+        expanded={quickCopyExpanded}
         platforms={platforms}
         prompt={prompt}
         primaryPlatformId={paneState.primaryPlatformId}
         secondaryPlatformId={secondaryPlatform?.id ?? null}
+        onChangeExpanded={setQuickCopyExpanded}
         onChangePrompt={setPrompt}
         onCopyAndOpen={handleCopyAndOpen}
-        onSaveFavorite={handleSaveFavorite}
         onSelectSecondary={(platformId) =>
           setPaneState((current) => ({
             ...current,
@@ -397,7 +323,7 @@ export default function App() {
       {copyToastVisible ? (
         <div className="copy-toast" role="status">
           <span>✓</span>
-          Prompt copied to clipboard
+          {copyToastMessage}
         </div>
       ) : null}
     </div>
