@@ -20,12 +20,14 @@ type WebviewElement = HTMLElement & {
 
 type PlatformViewProps = {
   isElectron: boolean;
+  lastCopiedAt: number | null;
   platform: Platform;
   title: string;
 };
 
 export function PlatformView({
   isElectron,
+  lastCopiedAt,
   platform,
   title
 }: PlatformViewProps) {
@@ -34,6 +36,7 @@ export function PlatformView({
   const [canGoForward, setCanGoForward] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(isElectron);
+  const [pasteHintVisible, setPasteHintVisible] = useState(false);
 
   useEffect(() => {
     setCanGoBack(false);
@@ -41,6 +44,17 @@ export function PlatformView({
     setLoadError(null);
     setLoading(isElectron);
   }, [isElectron, platform.id]);
+
+  useEffect(() => {
+    if (!lastCopiedAt || Date.now() - lastCopiedAt > 3000) {
+      return;
+    }
+
+    setPasteHintVisible(true);
+    const timeoutId = window.setTimeout(() => setPasteHintVisible(false), 3000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [lastCopiedAt]);
 
   useEffect(() => {
     const webview = webviewRef.current;
@@ -157,7 +171,10 @@ export function PlatformView({
         </div>
       </header>
       {isElectron ? (
-        <div className="platform-view__body">
+        <div
+          className="platform-view__body"
+          onPointerDown={() => setPasteHintVisible(false)}
+        >
           <webview
             ref={webviewRef}
             className="platform-view__webview"
@@ -177,6 +194,11 @@ export function PlatformView({
               <button className="material-button" onClick={reload} type="button">
                 重新加载
               </button>
+            </div>
+          ) : null}
+          {pasteHintVisible ? (
+            <div className="paste-hint" role="status">
+              Press Ctrl/Cmd + V to paste Prompt
             </div>
           ) : null}
         </div>

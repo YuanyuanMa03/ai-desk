@@ -62,12 +62,15 @@ export function ComposerDock({
         ) : null}
       </div>
 
-      <textarea
-        className="prompt-input"
-        value={prompt}
-        onChange={(event) => onChangePrompt(event.target.value)}
-        placeholder="输入 Prompt，复制到目标平台后手动粘贴发送"
-      />
+      <div className="prompt-input-wrap">
+        <textarea
+          className="prompt-input"
+          value={prompt}
+          onChange={(event) => onChangePrompt(event.target.value)}
+          placeholder="Enter Prompt... (Enter for newline)"
+        />
+        {prompt ? <span>{prompt.length} chars</span> : null}
+      </div>
 
       <div className="dock-actions">
         <button

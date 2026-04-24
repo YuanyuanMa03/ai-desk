@@ -79,8 +79,16 @@ for (const [name, size] of [
   await writePng(join(iconsetDir, name), size);
 }
 
-await sharp(Buffer.from(svg)).resize(256, 256).png().toFile(join(buildDir, "icon-256.png"));
-await writeFile(join(buildDir, "icon.ico"), await pngToIco(join(buildDir, "icon-256.png")));
+// Generate multi-size ICO for best Windows rendering across all contexts
+// (taskbar, desktop, file explorer, window title bar)
+const icoSizes = [16, 24, 32, 48, 64, 128, 256];
+const icoPngPaths = [];
+for (const size of icoSizes) {
+  const p = join(buildDir, `icon-${size}.png`);
+  await sharp(Buffer.from(svg)).resize(size, size).png().toFile(p);
+  icoPngPaths.push(p);
+}
+await writeFile(join(buildDir, "icon.ico"), await pngToIco(icoPngPaths));
 
 await writePng(iosIconPath, 1024);
 for (const [folder, size] of androidSizes) {
