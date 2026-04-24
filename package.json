@@ -1,6 +1,6 @@
 {
   "name": "ai-desk",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Local-first desktop AI aggregation workbench built with Electron, React, TypeScript, and Vite.",
   "main": "electron/main.cjs",
